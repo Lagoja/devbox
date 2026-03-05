@@ -70,5 +70,61 @@
           };
         };
       }
-    );
+    ) // {
+      # lib is system-independent — consumers pass the system string themselves.
+      lib = {
+        # packagesFromLock :: (path | attrset) -> string -> [derivation]
+        #
+        # Reads a devbox.lock file and returns a list of Nix derivations for the
+        # given system. Each package is resolved via its pinned nixpkgs rev and
+        # attribute path, making this fully pure (no network calls beyond what
+        # Nix's eval cache already handles).
+        #
+        # Example:
+        #   devbox-lib.lib.packagesFromLock ./devbox.lock pkgs.system
+        packagesFromLock = lockFileOrData: system:
+          let
+            nixlib = nixpkgs.lib;
+
+            lockData =
+              if builtins.isAttrs lockFileOrData
+              then lockFileOrData
+              else builtins.fromJSON (builtins.readFile lockFileOrData);
+
+            # The nixpkgs stdenv/channel entry keys look like "github:NixOS/nixpkgs/..."
+            # These are infrastructure entries, not user packages — exclude them.
+            isNixpkgsEntry = name: builtins.match "github:NixOS/nixpkgs/.*" name != null;
+            userPackages = nixlib.filterAttrs (name: _: !(isNixpkgsEntry name)) lockData.packages;
+
+            # Resolve a single package entry to a derivation.
+            # pkg.resolved is "github:NixOS/nixpkgs/<rev>#<attr_path>"
+            resolvePackage = _name: pkg:
+              let
+                # Split on "#" → ["github:NixOS/nixpkgs/<rev>", ["#"], "<attr_path>"]
+                parts = builtins.split "#" pkg.resolved;
+                flakeRef = builtins.elemAt parts 0;
+                attrPath = builtins.elemAt parts 2;
+
+                # Extract the full 40-char commit SHA from the flake ref.
+                # The ref may optionally have a "?lastModified=..." suffix.
+                revMatch = builtins.match "github:NixOS/nixpkgs/([a-f0-9]{40}).*" flakeRef;
+                rev = builtins.elemAt revMatch 0;
+
+                # Fetch the pinned nixpkgs. Pure when rev is a full commit SHA.
+                pinnedNixpkgs = builtins.fetchTree {
+                  type = "github";
+                  owner = "NixOS";
+                  repo = "nixpkgs";
+                  inherit rev;
+                };
+
+                pkgs = pinnedNixpkgs.legacyPackages.${system};
+              in
+                # attrByPath handles nested paths like "python312Packages.pip"
+                nixlib.attrByPath (nixlib.splitString "." attrPath) null pkgs;
+          in
+            builtins.filter (p: p != null)
+              (builtins.attrValues (builtins.mapAttrs resolvePackage userPackages));
+      };
+    };
 }
