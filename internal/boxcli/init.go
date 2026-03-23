@@ -66,5 +66,17 @@ func runInitCmd(cmd *cobra.Command, args []string, flags *initFlags) error {
 		return autodetect.InitConfig(cmd.Context(), path)
 	}
 
-	return devbox.InitConfig(path)
+	if err := devbox.InitConfig(path); err != nil {
+		return err
+	}
+
+	displayPath := path
+	if displayPath == "" || displayPath == "." {
+		if wd, err := os.Getwd(); err == nil {
+			displayPath = wd
+		}
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Created devbox.json in %s\n", displayPath)
+	fmt.Fprintln(cmd.OutOrStdout(), "Run `devbox add <package>` to add packages, or `devbox shell` to start a dev shell.")
+	return nil
 }
