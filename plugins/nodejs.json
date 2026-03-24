@@ -2,11 +2,12 @@
     "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox-plugin.schema.json",
     "version": "0.0.2",
     "name": "nodejs",
-    "readme": "Devbox automatically configures Corepack for Nodejs when DEVBOX_COREPACK_ENABLED=1. You can install Yarn or Pnpm by adding them to your `package.json` file using `packageManager`\nCorepack binaries will be installed in your local `.devbox` directory",
+    "readme": "Devbox automatically configures Corepack for Nodejs when DEVBOX_COREPACK_ENABLED=1. You can install Yarn or Pnpm by adding them to your `package.json` file using `packageManager`\nCorepack binaries will be installed in your local `.devbox` directory\nNote: if you are using `nodejs-slim`, corepack is not included by default. Add `corepack` to your devbox packages to use it with DEVBOX_COREPACK_ENABLED=1.",
     "shell": {
         "init_hook": [
-            "test -z $DEVBOX_COREPACK_ENABLED || corepack enable --install-directory \"{{ .Virtenv }}/corepack-bin/\"",
-            "test -z $DEVBOX_COREPACK_ENABLED || export PATH=\"{{ .Virtenv }}/corepack-bin/:$PATH\""
+            "test -z \"$DEVBOX_COREPACK_ENABLED\" || command -v corepack >/dev/null 2>&1 || echo \"Warning: DEVBOX_COREPACK_ENABLED is set but corepack is not available. If you are using nodejs-slim, add \\\"corepack\\\" to your devbox packages.\"",
+            "test -z \"$DEVBOX_COREPACK_ENABLED\" || ! command -v corepack >/dev/null 2>&1 || corepack enable --install-directory \"{{ .Virtenv }}/corepack-bin/\"",
+            "test -z \"$DEVBOX_COREPACK_ENABLED\" || ! command -v corepack >/dev/null 2>&1 || export PATH=\"{{ .Virtenv }}/corepack-bin/:$PATH\""
         ]
     },
     "create_files": {
